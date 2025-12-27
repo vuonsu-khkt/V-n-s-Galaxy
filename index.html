@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sử Việt 2150: Thiên Hà Tri Thức</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-cyan: #00f3ff;
+            --space-deep: #010105;
+            --panel-bg: rgba(5, 12, 24, 0.9);
+        }
+        body { margin: 0; overflow: hidden; background: var(--space-deep); font-family: 'Space Grotesk', sans-serif; color: white; }
+        .orbitron { font-family: 'Orbitron', sans-serif; }
+        
+        .glass-panel {
+            background: var(--panel-bg);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        #radar-wrapper {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            z-index: 40;
+        }
+
+        #radar-container {
+            width: 160px; height: 160px; border-radius: 50%;
+            border: 2px solid rgba(0, 243, 255, 0.2);
+            position: relative; overflow: hidden;
+            background: radial-gradient(circle, rgba(0, 243, 255, 0.05) 0%, transparent 70%);
+        }
+        .radar-sweep {
+            position: absolute; top: 50%; left: 50%; width: 100%; height: 100%;
+            background: conic-gradient(from 0deg, rgba(0, 243, 255, 0.4) 0%, transparent 25%);
+            transform-origin: top left; animation: sweep 4s linear infinite;
+        }
+        .radar-planet {
+            position: absolute; width: 6px; height: 6px; border-radius: 50%;
+            transform: translate(-50%, -50%); box-shadow: 0 0 8px currentColor;
+        }
+        .radar-ship {
+            position: absolute; top: 50%; left: 50%; width: 12px; height: 12px;
+            background: white; clip-path: polygon(50% 0%, 0% 100%, 50% 80%, 100% 100%);
+            transform: translate(-50%, -50%); z-index: 10;
+        }
+        @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        #warp-overlay {
+            position: fixed; inset: 0; pointer-events: none; opacity: 0;
+            background: radial-gradient(circle at center, transparent 20%, rgba(0,243,255,0.4) 100%);
+            transition: opacity 0.5s; z-index: 45;
+        }
+
+        #success-banner {
+            position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 100; pointer-events: none; opacity: 0; transition: all 0.5s;
+        }
+
+        .shaking { animation: shake 0.1s infinite; }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            50% { transform: translate(-1px, -2px) rotate(-0.5deg); }
+            100% { transform: translate(1px, -1px) rotate(0.5deg); }
+        }
+
+        .btn-neon {
+            border: 2px solid var(--neon-cyan); color: var(--neon-cyan);
+            transition: all 0.3s; text-transform: uppercase; letter-spacing: 2px;
+            background: transparent;
+        }
+        .btn-neon:hover:not(:disabled) {
+            background: var(--neon-cyan); color: black; box-shadow: 0 0 20px var(--neon-cyan);
+        }
+        
+        .correct-pulse { animation: correct-flash 0.5s ease-out; }
+        @keyframes correct-flash {
+            0% { background: rgba(0, 255, 0, 0); }
+            50% { background: rgba(0, 255, 0, 0.3); }
+            100% { background: rgba(0, 255, 0, 0); }
+        }
+
+        #log-box::-webkit-scrollbar { width: 4px; }
+        #log-box::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.3); }
+    </style>
+</head>
+<body>
+
+    <div id="intro-overlay" class="fixed inset-0 flex items-center justify-center p-6 text-center z-50 bg-[#010105]">
+        <div id="welcome-box" class="max-w-2xl">
+            <h1 class="orbitron text-6xl font-black mb-2 tracking-tighter">SỬ VIỆT <span class="text-cyan-500">2150</span></h1>
+            <p class="text-cyan-400/60 orbitron text-xs tracking-[0.5em] mb-12">102 MẢNH DỮ LIỆU ĐỘC NHẤT</p>
+            <button id="start-btn" class="btn-neon px-12 py-4 font-bold orbitron">KHỞI ĐỘNG HỆ THỐNG</button>
+        </div>
+
+        <div id="mission-box" class="hidden max-w-2xl glass-panel p-10 text-left border-t-4 border-t-cyan-500">
+            <div class="text-red-500 orbitron text-[10px] mb-4 font-bold animate-pulse">● EMERGENCY PROTOCOL ACTIVATED</div>
+            <h2 class="orbitron text-2xl mb-6 text-cyan-400">NHIỆM VỤ: KHÔI PHỤC TOÀN BỘ 34 LÕI</h2>
+            <div class="space-y-4 text-gray-300 font-light text-sm">
+                <p id="m1" class="opacity-0 transition-opacity duration-500">Mỗi hành tinh chứa 3 câu hỏi lịch sử riêng biệt, không bao giờ lặp lại.</p>
+                <p id="m2" class="opacity-0 transition-opacity duration-500">Bạn phải vượt qua 102 thử thách để khôi phục hoàn toàn dòng thời gian.</p>
+                <p id="m3" class="opacity-0 transition-opacity duration-500">Bản đồ Tactical Radar đã được tối ưu hóa ở góc cao.</p>
+            </div>
+            <button id="accept-btn" class="hidden mt-10 btn-neon w-full py-4 font-black orbitron">ENGAGE JUMP DRIVE</button>
+        </div>
+    </div>
+
+    <div id="success-banner" class="text-center">
+        <div class="orbitron text-cyan-400 text-6xl font-black mb-2 italic">DỮ LIỆU ĐÃ THU HỒI</div>
+        <div class="orbitron text-white text-xs tracking-[1em]">KÍCH HOẠT NHẢY KHÔNG GIAN...</div>
+    </div>
+
+    <div id="warp-overlay"></div>
+
+    <div id="radar-wrapper" class="opacity-0 transition-opacity duration-1000">
+        <div id="radar-container">
+            <div class="radar-sweep"></div>
+            <div class="radar-ship"></div>
+            <div id="radar-points"></div>
+        </div>
+        <div class="orbitron text-[9px] text-cyan-500 bg-black/40 px-2 py-1">TACTICAL RADAR</div>
+    </div>
+
+    <div id="hud" class="fixed inset-0 pointer-events-none opacity-0 transition-opacity duration-1000 z-30 flex flex-col justify-between">
+        <div class="p-6 flex justify-between items-start">
+            <div class="glass-panel p-4 w-72 pointer-events-auto">
+                <div class="orbitron text-[9px] text-cyan-500 mb-2">TIẾN TRÌNH KHÔI PHỤC</div>
+                <div id="node-grid" class="flex flex-wrap gap-1 mb-3"></div>
+                <div class="flex justify-between items-baseline">
+                    <span class="orbitron text-4xl font-black text-white" id="score-text">00</span>
+                    <span class="text-[9px] text-white/40">/ 34 HÀNH TINH</span>
+                </div>
+            </div>
+            <div class="text-right pr-48">
+                <div id="cur-system" class="orbitron text-cyan-500 text-[10px] tracking-[0.4em] mb-1">SCANNING...</div>
+                <div id="cur-planet" class="orbitron text-3xl font-bold">STATIONARY</div>
+            </div>
+        </div>
+
+        <div id="quiz-panel" class="flex items-center justify-center p-6 translate-y-20 opacity-0 transition-all duration-700">
+            <div id="quiz-box" class="max-w-3xl w-full glass-panel p-10 pointer-events-auto border-l-4 border-l-cyan-500 shadow-2xl">
+                <div class="flex justify-between items-center mb-8">
+                    <span class="orbitron text-[10px] bg-cyan-500 text-black px-2 py-1 font-bold">UNIQUE FRAGMENT</span>
+                    <span id="quiz-step" class="orbitron text-[10px] text-cyan-500">FRAG 1/3</span>
+                </div>
+                <h3 id="question-text" class="text-xl mb-10 font-medium leading-relaxed italic">Đang tải dữ liệu...</h3>
+                <div id="answer-grid" class="grid grid-cols-2 gap-4"></div>
+            </div>
+        </div>
+
+        <div class="bg-black/90 border-t border-cyan-500/30 p-4 px-6 flex items-center justify-between pointer-events-auto">
+            <div class="flex items-center gap-6">
+                <div class="orbitron">
+                    <div class="text-[9px] text-cyan-500">THỜI GIAN NIÊM GIÁM</div>
+                    <div class="text-2xl font-bold" id="timer">00:00:00</div>
+                </div>
+                <div class="h-8 w-px bg-white/10"></div>
+                <div>
+                    <div id="jump-status" class="orbitron text-cyan-500 text-[10px] animate-pulse">SYSTEM READY</div>
+                    <div id="jump-info" class="orbitron text-[8px] text-white/40 tracking-[0.2em]">CORE SYNC: STABLE</div>
+                </div>
+            </div>
+            
+            <div class="flex-1 max-w-lg mx-10">
+                <div class="glass-panel p-2 h-16 overflow-y-auto text-[10px] font-mono text-cyan-400/60 leading-tight" id="log-box">
+                    > Khởi tạo liên kết thần kinh...
+                </div>
+            </div>
+
+            <div class="w-48 text-right">
+                <div class="orbitron text-[10px] text-cyan-500 mb-1">TRẠNG THÁI</div>
+                <div class="text-xs text-white/60">HYPERJUMP: SẴN SÀNG</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA SECTION: 102 UNIQUE QUESTIONS ---
+        const rawQuestionData = [
+            // Thời Hồng Bàng (Hành tinh 0-5)
+            {q: "Vị vua đầu tiên của nhà nước Văn Lang là ai?", a: ["Hùng Vương", "An Dương Vương", "Lạc Long Quân", "Kinh Dương Vương"], c: "Hùng Vương"},
+            {q: "Nhà nước Âu Lạc do ai thành lập?", a: ["An Dương Vương", "Hùng Vương", "Thục Phán", "Triệu Đà"], c: "An Dương Vương"},
+            {q: "Kinh đô của nhà nước Văn Lang đặt tại đâu?", a: ["Phong Châu", "Cổ Loa", "Hoa Lư", "Thăng Long"], c: "Phong Châu"},
+            {q: "Thành Cổ Loa có hình dạng gì?", a: ["Hình xoáy ốc", "Hình vuông", "Hình chữ nhật", "Hình tròn"], c: "Hình xoáy ốc"},
+            {q: "Truyền thuyết nào giải thích nguồn gốc dân tộc Việt?", a: ["Con Rồng cháu Tiên", "Sơn Tinh Thủy Tinh", "Thánh Gióng", "Bánh chưng bánh giầy"], c: "Con Rồng cháu Tiên"},
+            {q: "Vũ khí huyền thoại giúp An Dương Vương giữ nước là gì?", a: ["Nỏ liên châu", "Gươm thần", "Tháp báo thiên", "Trống đồng"], c: "Nỏ liên châu"},
+            {q: "Ai là người dạy dân cấy lúa theo truyền thuyết Hùng Vương?", a: ["Vua Hùng", "Lạc Long Quân", "Tiên Dung", "Mỵ Nương"], c: "Vua Hùng"},
+            {q: "Sự tích nào nói về lòng hiếu thảo và nông nghiệp thời Hùng Vương?", a: ["Bánh chưng bánh giầy", "Trầu cau", "Dưa hấu", "Thạch Sanh"], c: "Bánh chưng bánh giầy"},
+            {q: "Vị anh hùng nào đánh giặc Ân thời Hùng Vương thứ 6?", a: ["Thánh Gióng", "Sơn Tinh", "Lý Ông Trọng", "Chử Đồng Tử"], c: "Thánh Gióng"},
+            {q: "Tên gọi nước ta thời Kinh Dương Vương là gì?", a: ["Xích Quỷ", "Văn Lang", "Âu Lạc", "Vạn Xuân"], c: "Xích Quỷ"},
+            {q: "Lạc Long Quân kết duyên cùng ai?", a: ["Âu Cơ", "Mỵ Nương", "Tiên Dung", "Ngọc Hoa"], c: "Âu Cơ"},
+            {q: "Lạc Long Quân và Âu Cơ sinh ra bao nhiêu người con?", a: ["100", "50", "12", "18"], c: "100"},
+            {q: "Con vật nào linh thiêng nhất trên Trống đồng Đông Sơn?", a: ["Chim Lạc", "Rồng", "Hổ", "Voi"], c: "Chim Lạc"},
+            {q: "Mai An Tiêm gắn liền với loại quả nào?", a: ["Dưa hấu", "Vải thiều", "Nhãn", "Bưởi"], c: "Dưa hấu"},
+            {q: "Ai là vợ của Chử Đồng Tử?", a: ["Tiên Dung", "Mỵ Châu", "Mỵ Nương", "Ngọc Hoa"], c: "Tiên Dung"},
+            {q: "Thủ đô của nước Âu Lạc nằm ở đâu?", a: ["Cổ Loa", "Mê Linh", "Hoa Lư", "Long Biên"], c: "Cổ Loa"},
+            {q: "Vị vua cuối cùng của nhà nước Văn Lang là ai?", a: ["Hùng Vương thứ 18", "Hùng Vương thứ 6", "An Dương Vương", "Kinh Dương Vương"], c: "Hùng Vương thứ 18"},
+            {q: "Lễ hội nào tưởng nhớ các vua Hùng?", a: ["Giỗ tổ Hùng Vương", "Lễ hội Gióng", "Lễ hội Chùa Hương", "Lễ hội gò Đống Đa"], c: "Giỗ tổ Hùng Vương"},
+
+            // Bắc Thuộc & Khởi Nghĩa (Hành tinh 6-11)
+            {q: "Hai Bà Trưng khởi nghĩa chống lại nhà nào?", a: ["Nhà Hán", "Nhà Đường", "Nhà Tống", "Nhà Minh"], c: "Nhà Hán"},
+            {q: "Ai là người hô vang câu nói 'Tôi muốn cưỡi cơn gió mạnh, đạp luồng sóng dữ'?", a: ["Bà Triệu", "Hai Bà Trưng", "Thái hậu Dương Vân Nga", "Nguyên phi Ỷ Lan"], c: "Bà Triệu"},
+            {q: "Lý Nam Đế đặt tên nước là gì sau khi khởi nghĩa thành công?", a: ["Vạn Xuân", "Đại Cồ Việt", "Đại Việt", "Âu Lạc"], c: "Vạn Xuân"},
+            {q: "Triệu Quang Phục chọn nơi nào làm căn cứ chống quân Lương?", a: ["Dạ Trạch", "Mê Linh", "Hát Môn", "Cổ Loa"], c: "Dạ Trạch"},
+            {q: "Vị vua nào được mệnh danh là Dạ Trạch Vương?", a: ["Triệu Quang Phục", "Lý Bôn", "Phùng Hưng", "Mai Thúc Loan"], c: "Triệu Quang Phục"},
+            {q: "Mai Thúc Loan lãnh đạo cuộc khởi nghĩa nào?", a: ["Mai Hắc Đế", "Dạ Trạch Vương", "Bố Cái Đại Vương", "Khởi nghĩa Lam Sơn"], c: "Mai Hắc Đế"},
+            {q: "Phùng Hưng được nhân dân tôn là gì?", a: ["Bố Cái Đại Vương", "Mai Hắc Đế", "Thiên Vương", "Đại vương"], c: "Bố Cái Đại Vương"},
+            {q: "Họ Khúc giành quyền tự chủ vào thế kỷ nào?", a: ["X", "IX", "XI", "VIII"], c: "X"},
+            {q: "Ai là người đặt nền móng tự chủ đầu tiên thời Bắc thuộc (905)?", a: ["Khúc Thừa Dụ", "Dương Đình Nghệ", "Ngô Quyền", "Kiều Công Tiễn"], c: "Khúc Thừa Dụ"},
+            {q: "Trận Bạch Đằng năm 938 do ai lãnh đạo?", a: ["Ngô Quyền", "Lê Hoàn", "Trần Hưng Đạo", "Lý Thường Kiệt"], c: "Ngô Quyền"},
+            {q: "Quân Nam Hán bị đánh bại hoàn toàn trên sông nào năm 938?", a: ["Sông Bạch Đằng", "Sông Như Nguyệt", "Sông Gianh", "Sông Hồng"], c: "Sông Bạch Đằng"},
+            {q: "Ngô Quyền đóng đô ở đâu?", a: ["Cổ Loa", "Hoa Lư", "Thăng Long", "Đại La"], c: "Cổ Loa"},
+            {q: "Hai Bà Trưng quê ở đâu?", a: ["Mê Linh", "Hát Môn", "Long Biên", "Phong Châu"], c: "Mê Linh"},
+            {q: "Chồng bà Trưng Trắc tên là gì?", a: ["Thi Sách", "Trọng Thủy", "Cao Lỗ", "Lý Thân"], c: "Thi Sách"},
+            {q: "Ai là người đánh đuổi quân Lương lập ra nhà Tiền Lý?", a: ["Lý Bí", "Lý Phật Tử", "Lý Thái Tổ", "Lý Thường Kiệt"], c: "Lý Bí"},
+            {q: "Mai Hắc Đế đóng đô ở đâu?", a: ["Vạn An", "Cổ Loa", "Hoa Lư", "Thanh Hóa"], c: "Vạn An"},
+            {q: "Khởi nghĩa Hai Bà Trưng diễn ra vào năm nào?", a: ["40", "938", "544", "179"], c: "40"},
+            {q: "Ai là em gái của Trưng Trắc?", a: ["Trưng Nhị", "Bà Triệu", "Mỵ Châu", "Huyền Trân"], c: "Trưng Nhị"},
+
+            // Độc lập & Đại Việt (Hành tinh 12-20)
+            {q: "Đinh Bộ Lĩnh dẹp loạn bao nhiêu sứ quân?", a: ["12", "18", "10", "24"], c: "12"},
+            {q: "Tên nước Đại Cồ Việt do ai đặt?", a: ["Đinh Tiên Hoàng", "Lê Đại Hành", "Ngô Quyền", "Lý Thái Tổ"], c: "Đinh Tiên Hoàng"},
+            {q: "Vị vua nào dời đô về Thăng Long năm 1010?", a: ["Lý Thái Tổ", "Lý Công Uẩn", "Trần Thái Tông", "Lê Lợi"], c: "Lý Thái Tổ"},
+            {q: "Lý Thường Kiệt đánh bại quân Tống trên sông nào?", a: ["Sông Như Nguyệt", "Sông Bạch Đằng", "Sông Gianh", "Sông Đà"], c: "Sông Như Nguyệt"},
+            {q: "Bài thơ 'Nam quốc sơn hà' được coi là bản gì?", a: ["Tuyên ngôn độc lập", "Hịch tướng sĩ", "Cáo bình Ngô", "Luật pháp"], c: "Tuyên ngôn độc lập"},
+            {q: "Nhà Trần được thành lập từ sự nhường ngôi của ai?", a: ["Lý Chiêu Hoàng", "Lý Huệ Tông", "Lý Cao Tông", "Lê Chiêu Thống"], c: "Lý Chiêu Hoàng"},
+            {q: "Ai là tác giả của 'Hịch tướng sĩ'?", a: ["Trần Hưng Đạo", "Trần Quang Khải", "Trần Nhật Duật", "Trần Khánh Dư"], c: "Trần Hưng Đạo"},
+            {q: "Quân Nguyên Mông bị đánh bại bao nhiêu lần tại Đại Việt?", a: ["3 lần", "2 lần", "4 lần", "5 lần"], c: "3 lần"},
+            {q: "Vị vua nào của nhà Trần đi tu và lập ra thiền phái Trúc Lâm?", a: ["Trần Nhân Tông", "Trần Thánh Tông", "Trần Thái Tông", "Trần Hiến Tông"], c: "Trần Nhân Tông"},
+            {q: "Trận Bạch Đằng năm 1288 do ai chỉ huy?", a: ["Trần Hưng Đạo", "Ngô Quyền", "Lê Hoàn", "Lý Thường Kiệt"], c: "Trần Hưng Đạo"},
+            {q: "Ai là người bóp nát quả cam vì không được dự hội nghị Bình Than?", a: ["Trần Quốc Toản", "Trần Quang Khải", "Trần Nhật Duật", "Phạm Ngũ Lão"], c: "Trần Quốc Toản"},
+            {q: "Lê Lợi khởi nghĩa chống quân Minh tại đâu?", a: ["Lam Sơn", "Chi Lăng", "Đông Quan", "Tây Đô"], c: "Lam Sơn"},
+            {q: "Quốc sư vĩ đại giúp nhà Lý trị quốc là ai?", a: ["Vạn Hạnh", "Chu Văn An", "Mạc Đĩnh Chi", "Nguyễn Hiền"], c: "Vạn Hạnh"},
+            {q: "Văn Miếu - Quốc Tử Giám được xây dựng dưới thời nào?", a: ["Nhà Lý", "Nhà Trần", "Nhà Lê", "Nhà Nguyễn"], c: "Nhà Lý"},
+            {q: "Hội nghị nào thể hiện ý chí quyết tâm của các bô lão thời Trần?", a: ["Hội nghị Diên Hồng", "Hội nghị Bình Than", "Hội nghị Đông Quan", "Hội nghị Lam Sơn"], c: "Hội nghị Diên Hồng"},
+            {q: "Trạng Nguyên nhỏ tuổi nhất lịch sử Việt Nam là ai?", a: ["Nguyễn Hiền", "Lương Thế Vinh", "Mạc Đĩnh Chi", "Lê Quý Đôn"], c: "Nguyễn Hiền"},
+            {q: "Nguyễn Trãi giúp vị vua nào đánh thắng giặc Minh?", a: ["Lê Lợi", "Trần Hưng Đạo", "Quang Trung", "Gia Long"], c: "Lê Lợi"},
+            {q: "Thành nhà Hồ do ai xây dựng?", a: ["Hồ Quý Ly", "Hồ Hán Thương", "Trần Nghệ Tông", "Lê Lợi"], c: "Hồ Quý Ly"},
+            {q: "Bộ luật Hồng Đức là thành tựu tiêu biểu của triều đại nào?", a: ["Hậu Lê", "Nhà Lý", "Nhà Trần", "Nhà Nguyễn"], c: "Hậu Lê"},
+            {q: "Lê Thánh Tông nổi tiếng với hội thơ nào?", a: ["Tao Đàn", "Văn Hiến", "Bình Ngô", "Đông A"], c: "Tao Đàn"},
+            {q: "Vị tướng nào có công lớn nhất trong trận Hàm Tử - Chương Dương?", a: ["Trần Quang Khải", "Trần Quốc Toản", "Trần Hưng Đạo", "Phạm Ngũ Lão"], c: "Trần Quang Khải"},
+            {q: "Thương cảng nổi tiếng nhất Đàng Trong thời Trịnh - Nguyễn?", a: ["Hội An", "Phố Hiến", "Thăng Long", "Vân Đồn"], c: "Hội An"},
+            {q: "Ai được mệnh danh là 'Lưỡng quốc Trạng nguyên'?", a: ["Mạc Đĩnh Chi", "Nguyễn Bỉnh Khiêm", "Phùng Khắc Khoan", "Nguyễn Hiền"], c: "Mạc Đĩnh Chi"},
+            {q: "Quang Trung đại phá quân Thanh vào năm nào?", a: ["1789", "1788", "1802", "1771"], c: "1789"},
+            {q: "Vị vua nào thành lập triều đại Tây Sơn?", a: ["Nguyễn Huệ", "Nguyễn Nhạc", "Nguyễn Ánh", "Lê Chiêu Thống"], c: "Nguyễn Huệ"},
+            {q: "Trận Rạch Gầm - Xoài Mút quân Tây Sơn đánh bại quân nào?", a: ["Quân Xiêm", "Quân Thanh", "Quân Anh", "Quân Pháp"], c: "Quân Xiêm"},
+            {q: "Nguyễn Ánh lấy hiệu là gì khi lên ngôi?", a: ["Gia Long", "Minh Mạng", "Thiệu Trị", "Tự Đức"], c: "Gia Long"},
+
+            // Cận Đại & Hiện Đại (Hành tinh 21-33)
+            {q: "Thực dân Pháp bắt đầu xâm lược nước ta tại đâu năm 1858?", a: ["Đà Nẵng", "Sài Gòn", "Huế", "Hà Nội"], c: "Đà Nẵng"},
+            {q: "Vị vua cuối cùng của triều Nguyễn là ai?", a: ["Bảo Đại", "Khải Định", "Duy Tân", "Thành Thái"], c: "Bảo Đại"},
+            {q: "Lãnh tụ phong trào Cần Vương là ai?", a: ["Hàm Nghi", "Duy Tân", "Thành Thái", "Khải Định"], c: "Hàm Nghi"},
+            {q: "Ai là người tổ chức phong trào Đông Du?", a: ["Phan Bội Châu", "Phan Châu Trinh", "Nguyễn Ái Quốc", "Hoàng Hoa Thám"], c: "Phan Bội Châu"},
+            {q: "Chiến dịch Điện Biên Phủ kết thúc vào năm nào?", a: ["1954", "1945", "1975", "1968"], c: "1954"},
+            {q: "Bản Tuyên ngôn Độc lập được đọc tại quảng trường nào?", a: ["Ba Đình", "Đông Kinh Nghĩa Thục", "Lam Sơn", "Gò Đống Đa"], c: "Ba Đình"},
+            {q: "Vị tướng chỉ huy chiến dịch Điện Biên Phủ là ai?", a: ["Võ Nguyên Giáp", "Văn Tiến Dũng", "Lê Trọng Tấn", "Trần Can"], c: "Võ Nguyên Giáp"},
+            {q: "Ngày giải phóng miền Nam thống nhất đất nước là ngày nào?", a: ["30/4/1975", "2/9/1945", "7/5/1954", "19/5/1890"], c: "30/4/1975"},
+            {q: "Học giả nào biên soạn 'Đại Việt sử ký toàn thư'?", a: ["Ngô Sĩ Liên", "Lê Văn Hưu", "Phan Huy Chú", "Lê Quý Đôn"], c: "Ngô Sĩ Liên"},
+            {q: "Ai được mệnh danh là Trạng Lường?", a: ["Lương Thế Vinh", "Mạc Đĩnh Chi", "Nguyễn Hiền", "Lê Quý Đôn"], c: "Lương Thế Vinh"},
+            {q: "Chùa Một Cột được xây dựng vào triều đại nào?", a: ["Nhà Lý", "Nhà Trần", "Nhà Hậu Lê", "Nhà Đinh"], c: "Nhà Lý"},
+            {q: "Vị trạng nguyên nào nổi tiếng với biệt danh 'Trạng Bùng'?", a: ["Phùng Khắc Khoan", "Mạc Đĩnh Chi", "Nguyễn Bỉnh Khiêm", "Nguyễn Hiền"], c: "Phùng Khắc Khoan"},
+            {q: "Ai là thầy giáo tiêu biểu nhất thời Trần?", a: ["Chu Văn An", "Nguyễn Phi Khanh", "Đoàn Thị Điểm", "Lê Văn Hưu"], c: "Chu Văn An"},
+            {q: "Ai là tác giả của 'Chinh phụ ngâm' (bản diễn xôm)?", a: ["Đoàn Thị Điểm", "Bà Huyện Thanh Quan", "Hồ Xuân Hương", "Nguyễn Du"], c: "Đoàn Thị Điểm"},
+            {q: "Bộ truyện Nôm vĩ đại nhất của Nguyễn Du là gì?", a: ["Truyện Kiều", "Lục Vân Tiên", "Cung oán ngâm khúc", "Bích Câu kỳ ngộ"], c: "Truyện Kiều"},
+            {q: "Tên cũ của Thành phố Hồ Chí Minh là gì?", a: ["Sài Gòn", "Gia Định", "Chợ Lớn", "Tất cả đúng"], c: "Tất cả đúng"},
+            {q: "Vịnh nào của Việt Nam được UNESCO công nhận là di sản thiên nhiên thế giới đầu tiên?", a: ["Vịnh Hạ Long", "Vịnh Lan Hạ", "Vịnh Cam Ranh", "Vịnh Xuân Đài"], c: "Vịnh Hạ Long"},
+            {q: "Thủ đô của nước Cộng hòa Xã hội Chủ nghĩa Việt Nam là?", a: ["Hà Nội", "Huế", "TP. Hồ Chí Minh", "Đà Nẵng"], c: "Hà Nội"},
+            {q: "Nhà bác học lớn nhất Việt Nam thời phong kiến là ai?", a: ["Lê Quý Đôn", "Nguyễn Bỉnh Khiêm", "Hải Thượng Lãn Ông", "Chu Văn An"], c: "Lê Quý Đôn"},
+            {q: "Thành phố được mệnh danh là 'Thành phố Hoa phượng đỏ'?", a: ["Hải Phòng", "Hà Nội", "Đà Lạt", "Cần Thơ"], c: "Hải Phòng"},
+            {q: "Quốc hoa của Việt Nam là gì?", a: ["Hoa Sen", "Hoa Mai", "Hoa Đào", "Hoa Hồng"], c: "Hoa Sen"},
+            {q: "Nghề thủ công truyền thống nổi tiếng ở Bát Tràng?", a: ["Gốm sứ", "Dệt lụa", "Đúc đồng", "Làm nón"], c: "Gốm sứ"},
+            {q: "Đảo lớn nhất của Việt Nam tên là gì?", a: ["Phú Quốc", "Cát Bà", "Côn Đảo", "Lý Sơn"], c: "Phú Quốc"},
+            {q: "Dãy núi cao nhất Việt Nam là?", a: ["Hoàng Liên Sơn", "Trường Sơn", "Bạch Mã", "Hương Sơn"], c: "Hoàng Liên Sơn"},
+            {q: "Cầu nào bắc qua sông Hương tại Huế?", a: ["Cầu Trường Tiền", "Cầu Long Biên", "Cầu Rồng", "Cầu Nhật Tân"], c: "Cầu Trường Tiền"},
+            {q: "Đèo nào ngăn cách Đà Nẵng và Thừa Thiên Huế?", a: ["Đèo Hải Vân", "Đèo Ngang", "Đèo Cù Mông", "Đèo Pha Đin"], c: "Đèo Hải Vân"},
+            {q: "Ai được mệnh danh là 'Ông trạng thả diều'?", a: ["Nguyễn Hiền", "Lương Thế Vinh", "Mạc Đĩnh Chi", "Lê Quý Đôn"], c: "Nguyễn Hiền"},
+            {q: "Tháp Rùa nằm ở giữa hồ nào?", a: ["Hồ Hoàn Kiếm", "Hồ Tây", "Hồ Trúc Bạch", "Hồ Bảy Mẫu"], c: "Hồ Hoàn Kiếm"},
+            {q: "Loại nhạc cụ truyền thống chỉ có 1 dây của Việt Nam?", a: ["Đàn Bầu", "Đàn Nguyệt", "Đàn Tranh", "Đàn Nhị"], c: "Đàn Bầu"},
+            {q: "Tác giả 'Nam quốc sơn hà' tương truyền là ai?", a: ["Lý Thường Kiệt", "Lý Thái Tổ", "Trần Hưng Đạo", "Ngô Quyền"], c: "Lý Thường Kiệt"},
+            {q: "Kỳ quan đá vôi nổi tiếng ở Ninh Bình là?", a: ["Tràng An", "Phong Nha", "Sapa", "Mũi Né"], c: "Tràng An"},
+            {q: "Lăng Bác Hồ nằm ở quảng trường nào?", a: ["Ba Đình", "Đông Kinh", "Cách Mạng Tháng Tám", "Lam Sơn"], c: "Ba Đình"}
+        ];
+
+        let scene, camera, renderer, starField;
+        let planets = [];
+        let currentIdx = -1;
+        let currentStep = 0;
+        let solvedCount = 0;
+        let isJumping = false;
+        const planetList = [];
+        const systemNames = ["Hồng Bàng", "Bắc Thuộc", "Tự Chủ", "Đại Việt", "Trịnh Nguyễn", "Cận Đại"];
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSfx(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            switch(type) {
+                case 'click':
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(800, now);
+                    gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(); osc.stop(now + 0.1); break;
+                case 'correct':
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(1000, now + 0.2);
+                    gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(); osc.stop(now + 0.2); break;
+                case 'wrong':
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
+                    gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(); osc.stop(now + 0.3); break;
+                case 'warp':
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(40, now);
+                    osc.frequency.exponentialRampToValueAtTime(3500, now + 2);
+                    gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.3, now + 0.5);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 2.5);
+                    osc.start(); osc.stop(now + 2.5); break;
+            }
+        }
+
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // --- ALLOT QUESTIONS TO PLANETS (3 EACH, NO OVERLAP) ---
+        for(let i=0; i<34; i++) {
+            const startQ = i * 3;
+            planetList.push({
+                name: `X-${(200+i).toString(16).toUpperCase()}`,
+                system: systemNames[Math.floor(i / 6)] || "Thiên Hà Xa Xôi",
+                color: new THREE.Color().setHSL(i/34, 0.8, 0.5),
+                quizzes: rawQuestionData.slice(startQ, startQ + 3)
+            });
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 150000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const starPos = [];
+            for(let i=0; i<30000; i++) starPos.push((Math.random()-0.5)*120000, (Math.random()-0.5)*120000, (Math.random()-0.5)*120000);
+            const starGeo = new THREE.BufferGeometry();
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+            starField = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xffffff, size: 2}));
+            scene.add(starField);
+
+            planetList.forEach((p, i) => {
+                const group = new THREE.Group();
+                const dist = 15000 + (i * 4000);
+                const angle = i * 0.8;
+                group.position.set(Math.cos(angle)*dist, (Math.random()-0.5)*3000, Math.sin(angle)*dist);
+                
+                const mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(600, 32, 32), 
+                    new THREE.MeshStandardMaterial({color: p.color, emissive: p.color, emissiveIntensity: 0.2})
+                );
+                group.add(mesh);
+                scene.add(group);
+                planets.push(group);
+
+                const dot = document.createElement('div');
+                dot.className = 'radar-planet';
+                dot.id = `radar-p-${i}`;
+                dot.style.color = `#${p.color.getHexString()}`;
+                dot.style.backgroundColor = 'currentColor';
+                document.getElementById('radar-points').appendChild(dot);
+
+                const node = document.createElement('div');
+                node.className = 'w-1.5 h-1.5 border border-cyan-500/20';
+                node.id = `node-${i}`;
+                document.getElementById('node-grid').appendChild(node);
+            });
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            camera.position.set(0, 5000, 10000);
+            animate();
+        }
+
+        function updateRadar() {
+            planets.forEach((p, i) => {
+                const dot = document.getElementById(`radar-p-${i}`);
+                if(!dot) return;
+                const scale = 0.0006;
+                const relX = (p.position.x - camera.position.x) * scale;
+                const relZ = (p.position.z - camera.position.z) * scale;
+                const x = 50 + relX, y = 50 + relZ;
+                dot.style.left = `${x}%`; dot.style.top = `${y}%`;
+                dot.style.opacity = (Math.sqrt(relX**2 + relZ**2) > 48) ? '0' : '1';
+            });
+        }
+
+        async function startJump() {
+            if(isJumping) return;
+            isJumping = true;
+            currentIdx++;
+            
+            if(currentIdx >= planetList.length) {
+                addLog("HOÀN TẤT: 102 MẢNH DỮ LIỆU ĐÃ ĐƯỢC KHÔI PHỤC THÀNH CÔNG");
+                return;
+            }
+
+            document.getElementById('quiz-panel').style.opacity = '0';
+            document.getElementById('quiz-panel').style.transform = 'translateY(20px)';
+            document.getElementById('warp-overlay').style.opacity = '1';
+            document.body.classList.add('shaking');
+            
+            playSfx('warp');
+            addLog(`HYPERJUMP: TIẾN TỚI ${planetList[currentIdx].name} (HỆ ${planetList[currentIdx].system.toUpperCase()})`);
+
+            const targetPos = planets[currentIdx].position.clone().add(new THREE.Vector3(0, 800, 3000));
+            const startPos = camera.position.clone();
+            const steps = 80;
+            
+            for(let i=0; i<=steps; i++) {
+                const t = i/steps;
+                const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                camera.position.lerpVectors(startPos, targetPos, ease);
+                camera.lookAt(planets[currentIdx].position);
+                updateRadar();
+                await new Promise(r => requestAnimationFrame(r));
+            }
+
+            document.getElementById('warp-overlay').style.opacity = '0';
+            document.body.classList.remove('shaking');
+            document.getElementById('cur-system').innerText = `HỆ SAO: ${planetList[currentIdx].system.toUpperCase()}`;
+            document.getElementById('cur-planet').innerText = planetList[currentIdx].name;
+            
+            isJumping = false;
+            showQuiz();
+        }
+
+        function showQuiz() {
+            const q = planetList[currentIdx].quizzes[currentStep];
+            if (!q) return;
+
+            document.getElementById('quiz-step').innerText = `FRAGMENT ${currentStep+1}/3`;
+            document.getElementById('question-text').innerText = q.q;
+            
+            const grid = document.getElementById('answer-grid');
+            grid.innerHTML = '';
+            
+            // SHUFFLE OPTIONS
+            const shuffledOptions = shuffle([...q.a]);
+            
+            shuffledOptions.forEach(ans => {
+                const b = document.createElement('button');
+                b.className = 'p-4 text-left border border-cyan-500/20 hover:bg-cyan-500/10 orbitron text-[11px] transition-all group flex items-center gap-3 pointer-events-auto';
+                b.innerHTML = `<span class="text-cyan-500 opacity-0 group-hover:opacity-100 transition-all">>></span> <span>${ans}</span>`;
+                b.onclick = () => {
+                    if(isJumping) return;
+                    if(ans === q.c) {
+                        playSfx('correct');
+                        document.getElementById('quiz-box').classList.add('correct-pulse');
+                        setTimeout(() => document.getElementById('quiz-box').classList.remove('correct-pulse'), 500);
+                        
+                        if(++currentStep < 3) {
+                            showQuiz();
+                        } else {
+                            handlePlanetSuccess();
+                        }
+                    } else {
+                        playSfx('wrong');
+                        addLog(`CẢNH BÁO: GIẢI MÃ THẤT BẠI TẠI ${planetList[currentIdx].name}`);
+                    }
+                };
+                grid.appendChild(b);
+            });
+            
+            document.getElementById('quiz-panel').style.opacity = '1';
+            document.getElementById('quiz-panel').style.transform = 'translateY(0)';
+        }
+
+        function handlePlanetSuccess() {
+            document.getElementById(`node-${currentIdx}`).style.background = '#00f3ff';
+            document.getElementById(`node-${currentIdx}`).style.boxShadow = '0 0 10px #00f3ff';
+            
+            solvedCount++;
+            document.getElementById('score-text').innerText = solvedCount.toString().padStart(2, '0');
+            addLog(`THÀNH CÔNG: KHÔI PHỤC HOÀN TẤT LÕI ${planetList[currentIdx].name}`);
+            
+            const banner = document.getElementById('success-banner');
+            banner.style.opacity = '1';
+            banner.style.transform = 'translate(-50%, -50%) scale(1.1)';
+            
+            currentStep = 0;
+            
+            setTimeout(() => {
+                banner.style.opacity = '0';
+                banner.style.transform = 'translate(-50%, -50%) scale(1)';
+                startJump();
+            }, 2500);
+        }
+
+        function addLog(msg) {
+            const box = document.getElementById('log-box');
+            const entry = document.createElement('div');
+            entry.innerHTML = `> ${msg}`;
+            box.prepend(entry);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(starField) starField.rotation.y += 0.00015;
+            if(planets[currentIdx]) planets[currentIdx].rotation.y += 0.008;
+            renderer.render(scene, camera);
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            playSfx('click');
+            document.getElementById('welcome-box').classList.add('hidden');
+            document.getElementById('mission-box').classList.remove('hidden');
+            setTimeout(() => document.getElementById('m1').style.opacity = 1, 300);
+            setTimeout(() => document.getElementById('m2').style.opacity = 1, 800);
+            setTimeout(() => document.getElementById('m3').style.opacity = 1, 1300);
+            setTimeout(() => document.getElementById('accept-btn').classList.remove('hidden'), 1800);
+        });
+
+        document.getElementById('accept-btn').onclick = () => {
+            document.getElementById('intro-overlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('intro-overlay').style.display = 'none';
+                document.getElementById('hud').style.opacity = '1';
+                document.getElementById('radar-wrapper').style.opacity = '1';
+                init3D();
+                startJump();
+            }, 1000);
+        };
+
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('timer').innerText = now.toLocaleTimeString('en-GB');
+        }, 1000);
+
+        window.onresize = () => {
+            if(camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        };
+    </script>
+</body>
+</html>
+
